@@ -1,0 +1,8 @@
+# IDE-specific files
+.vscode/
+
+# Python-specific files
+__pycache__/
+
+# macOS-specific files
+.DS_Store
