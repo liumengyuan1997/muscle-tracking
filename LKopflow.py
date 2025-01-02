@@ -1,13 +1,19 @@
 import numpy as np
 import cv2 as cv
 import matplotlib.pyplot as plt
+import json
 import os
 # from utils import generate_tracking_mask
 
 video_path = './data/test_lower_longus.mp4'
+json_path = 'axial_268.json'
 
+# Get points_to_track array from json file
+with open(json_path, "r") as f:
+    mask_data = json.load(f)
+    points_to_track = mask_data["shapes"][0]["points"]
 # Create a list to store the points clicked by the user
-points_to_track = []
+# points_to_track = []
 points_to_mask = []
 
 # Mouse click event callback function
@@ -28,9 +34,9 @@ else:
     # Default to 30ms if fps couldn't be retrieved
     frame_delay = 30
 
-# Set up a window and bind the mouse event to it
-cv.namedWindow('Select Points')
-cv.setMouseCallback('Select Points', select_point)
+# # Set up a window and bind the mouse event to it
+# cv.namedWindow('Select Points')
+# cv.setMouseCallback('Select Points', select_point)
 
 # Capture the first frame of the video
 ret, old_frame = cap.read()
@@ -39,11 +45,11 @@ if not ret:
     exit()
 
 old_frame_display = old_frame.copy()
-# Show the first frame and let the user select points
-while True:
-    cv.imshow('Select Points', old_frame)
-    if cv.waitKey(1) & 0xFF == 27:  # Press 'Esc' to finish selecting points
-        break
+# # Show the first frame and let the user select points
+# while True:
+#     cv.imshow('Select Points', old_frame)
+#     if cv.waitKey(1) & 0xFF == 27:  # Press 'Esc' to finish selecting points
+#         break
 
 
 # Convert the selected points into a numpy array and reshape it
@@ -59,7 +65,7 @@ old_gray = cv.cvtColor(old_frame, cv.COLOR_BGR2GRAY)
 p0_good = cv.goodFeaturesToTrack(
     old_gray,            # Input grayscale image
     maxCorners=10000,      # Maximum number of corners to return
-    qualityLevel=0.01,    # Quality level (between 0 and 1)
+    qualityLevel=0.02,    # Quality level (between 0 and 1)
     minDistance=1,       # Minimum possible Euclidean distance between returned corners
     blockSize=4,         # Size of the neighborhood considered for corner detection
     useHarrisDetector=False,  # Whether to use Harris corner detector
@@ -97,24 +103,38 @@ def is_edge_by_contrast(point, gray_img, threshold):
     return False
 
 def is_edge_by_gradient(point, gray_img, threshold):
+    # Define the vertical kernel
+    kernel = np.array([
+        [-1, -1, -1],
+        [-1,  8, -1],
+        [-1, -1, -1]
+    ], dtype=np.float32)
+    
+    # Apply the kernel
+    gradient = cv.filter2D(gray_img, cv.CV_64F, kernel)
 
-    sobel_x = cv.Sobel(gray_img, cv.CV_64F, 1, 0, ksize=3)
-    sobel_y = cv.Sobel(gray_img, cv.CV_64F, 0, 1, ksize=3)
-
-    gradient_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
-
-    x, y = point
-    grad_value = gradient_magnitude[y, x]
-
+    abs_gradient = np.abs(gradient)
+    
+    # Get integer indices
+    x, y = int(point[0]), int(point[1])  # Ensure indices are integers
+    
+    # Check bounds to avoid index errors
+    if x < 0 or y < 0 or y >= abs_gradient.shape[0] or x >= abs_gradient.shape[1]:
+        raise ValueError(f"Point {point} is out of bounds for the given image.")
+    
+    # Get the combined gradient value at the specific point
+    grad_value = abs_gradient[y, x]
+    
+    # Check if the gradient value is above the threshold
     return grad_value >= threshold
 
-# iterate p0 points，change it to the nearest p0_best
-new_p0 = []
-for p in p0:
-    x, y = p.ravel()
-    nearest_edge_point = find_nearest_edge_point([x, y], p0_good)
-    new_p0.append(nearest_edge_point)
-
+# # iterate p0 points，change it to the nearest p0_best
+# new_p0 = []
+# for p in p0:
+#     x, y = p.ravel()
+#     nearest_edge_point = find_nearest_edge_point([x, y], p0_good)
+#     new_p0.append(nearest_edge_point)
+new_p0 = p0
 # convert p0 to numpy and change the shape
 p0 = np.array(new_p0, dtype=np.float32).reshape(-1, 1, 2)
 points_to_mask.append(p0)
@@ -135,7 +155,22 @@ while True:
         print('No frames grabbed!')
         break
 
+    # # Apply noise removal before processing the frame
+    # # Use Gaussian Blur to reduce noise
+    # frame = cv.GaussianBlur(frame, (3, 3), 0)
+    # # Use Median Blur to reduce noise
+    # cv.medianBlur(frame, 5)
+
     frame_gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+
+    # # Define a kernel for morphological operations
+    # kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))  # 3x3 rectangular kernel
+
+    # # Apply erosion to reduce noise or shrink bright regions
+    # frame_eroded = cv.erode(frame_gray, kernel, iterations=1)
+
+    # # Apply dilation to enhance bright regions
+    # frame_dilated = cv.dilate(frame_eroded, kernel, iterations=1)
 
     # Calculate optical flow for the selected points
     p1, st, err = cv.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
@@ -180,11 +215,12 @@ while True:
     # Check outliers every n frames
     if frame_counter % 1 == 0:  
         for corner in new_p1:
-            if is_edge_by_contrast(corner, frame_gray, 40):  
+            if is_edge_by_gradient(corner, frame_gray, 10):  
                 edge_corners.append(corner)
     else:
         edge_corners = new_p1
 
+    # edge_corners = new_p1
     # Convert the updated list of points into the appropriate shape for tracking (N, 1, 2)
     new_p1 = np.array(edge_corners, dtype=np.float32).reshape(-1, 1, 2)
     # #---------------------mask----------------------------
