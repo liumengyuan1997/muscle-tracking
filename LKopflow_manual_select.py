@@ -5,22 +5,21 @@ import json
 import os
 # from utils import generate_tracking_mask
 
-video_path = './data/test_lower_longus.mp4'
-json_path = 'axial_268.json'
+video_path = './data/06_lower.mp4'
 
-# Get points_to_track array from json file
-with open(json_path, "r") as f:
-    mask_data = json.load(f)
-    points_to_track = mask_data["shapes"][0]["points"]
 # Create a list to store the points clicked by the user
-# points_to_track = []
-points_to_mask = []
+points_to_track = []
 
 # Mouse click event callback function
 def select_point(event, x, y, flags, param):
+    global old_frame_display
     if event == cv.EVENT_LBUTTONDOWN:  # Left mouse button click
         points_to_track.append([x, y])
         print(f"Selected point: {x}, {y}")
+        
+        # Draw the selected point on the frame
+        old_frame_display = cv.circle(old_frame_display, (x, y), 5, (0, 0, 255), -1)
+        cv.imshow('Select Points', old_frame_display)
 
 cap = cv.VideoCapture(video_path)
 
@@ -34,9 +33,9 @@ else:
     # Default to 30ms if fps couldn't be retrieved
     frame_delay = 30
 
-# # Set up a window and bind the mouse event to it
-# cv.namedWindow('Select Points')
-# cv.setMouseCallback('Select Points', select_point)
+# Set up a window and bind the mouse event to it
+cv.namedWindow('Select Points')
+cv.setMouseCallback('Select Points', select_point)
 
 # Capture the first frame of the video
 ret, old_frame = cap.read()
@@ -45,12 +44,11 @@ if not ret:
     exit()
 
 old_frame_display = old_frame.copy()
-# # Show the first frame and let the user select points
-# while True:
-#     cv.imshow('Select Points', old_frame)
-#     if cv.waitKey(1) & 0xFF == 27:  # Press 'Esc' to finish selecting points
-#         break
-
+# Show the first frame and let the user select points
+while True:
+    cv.imshow('Select Points', old_frame)
+    if cv.waitKey(1) & 0xFF == 27:  # Press 'Esc' to finish selecting points
+        break
 
 # Convert the selected points into a numpy array and reshape it
 if len(points_to_track) > 0:
@@ -128,16 +126,19 @@ def is_edge_by_gradient(point, gray_img, threshold):
     # Check if the gradient value is above the threshold
     return grad_value >= threshold
 
-# # iterate p0 points，change it to the nearest p0_best
-# new_p0 = []
-# for p in p0:
-#     x, y = p.ravel()
-#     nearest_edge_point = find_nearest_edge_point([x, y], p0_good)
-#     new_p0.append(nearest_edge_point)
-new_p0 = p0
-# convert p0 to numpy and change the shape
-p0 = np.array(new_p0, dtype=np.float32).reshape(-1, 1, 2)
-points_to_mask.append(p0)
+# iterate p0 points，change it to the nearest p0_best
+new_p0 = []
+for p in p0:
+    x, y = p.ravel()
+    nearest_edge_point = find_nearest_edge_point([x, y], p0_good)
+    new_p0.append(nearest_edge_point)
+
+new_p0 = np.array(new_p0, dtype=np.float32).reshape(-1, 1, 2)
+
+# # convert p0 to numpy and change the shape
+# p0 = np.array(new_p0, dtype=np.float32).reshape(-1, 1, 2)
+# points_to_mask.append(p0)
+
 # Parameters for Lucas-Kanade optical flow
 lk_params = dict(winSize=(10, 10), maxLevel=2, criteria=(cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 0.03))
 
@@ -147,7 +148,7 @@ color = [np.random.randint(0, 255, 3).tolist() for _ in range(1000)]
 # Create a mask image to draw the optical flow tracks
 mask = np.zeros_like(old_frame)
 
-frame_counter = 111
+frame_counter = 233
 # Start tracking the points through the video frames
 while True:
     ret, frame = cap.read()
@@ -155,34 +156,18 @@ while True:
         print('No frames grabbed!')
         break
 
-    # # Apply noise removal before processing the frame
-    # # Use Gaussian Blur to reduce noise
-    # frame = cv.GaussianBlur(frame, (3, 3), 0)
-    # # Use Median Blur to reduce noise
-    # cv.medianBlur(frame, 5)
-
     frame_gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
-    # # Define a kernel for morphological operations
-    # kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))  # 3x3 rectangular kernel
-
-    # # Apply erosion to reduce noise or shrink bright regions
-    # frame_eroded = cv.erode(frame_gray, kernel, iterations=1)
-
-    # # Apply dilation to enhance bright regions
-    # frame_dilated = cv.dilate(frame_eroded, kernel, iterations=1)
-
     # Calculate optical flow for the selected points
-    p1, st, err = cv.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
+    p1, st, err = cv.calcOpticalFlowPyrLK(old_gray, frame_gray, new_p0, None, **lk_params)
 
     # Select good points where optical flow is successfully calculated
     if p1 is not None:
         good_new = p1[st == 1]
-        good_old = p0[st == 1]
+        good_old = new_p0[st == 1]
     else:
         print("No good points to track.")
         break
-
 
     # Threshold for distance to add a new point (you can adjust this value)
     distance_threshold = 15
@@ -215,18 +200,18 @@ while True:
     # Check outliers every n frames
     if frame_counter % 1 == 0:  
         for corner in new_p1:
-            if is_edge_by_gradient(corner, frame_gray, 10):  
+            if is_edge_by_contrast(corner, frame_gray, 10):  
                 edge_corners.append(corner)
     else:
         edge_corners = new_p1
 
-    # edge_corners = new_p1
     # Convert the updated list of points into the appropriate shape for tracking (N, 1, 2)
     new_p1 = np.array(edge_corners, dtype=np.float32).reshape(-1, 1, 2)
+
     # #---------------------mask----------------------------
     # points_int = np.int32(new_p1)
 
-    # height, width = 166, 516
+    # height, width = 144, 544
     # mask_saved = np.zeros((height, width), dtype=np.uint8)
 
     # cv.fillPoly(mask_saved, [points_int], 255)
@@ -260,8 +245,7 @@ while True:
 
     # Update the previous frame and points for the next iteration
     old_gray = frame_gray.copy()
-    p0 = new_p1
-    points_to_mask.append(p0)
+    new_p0 = new_p1
     frame_counter += 1
 
 # generate_tracking_mask(points_to_mask, (516, 166), "./mask")

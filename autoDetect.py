@@ -3,41 +3,46 @@ import cv2 as cv
 import os
 import scipy.interpolate
 
-video_path = './data/test_upper_longus.mp4'
+video_path = './data/06_upper.mp4'
 
 # Mouse click event callback function to select bounding box
 bbox = []
-def select_bbox(event, x, y, flags, param):
-    global bbox
+drawing = False
+ix, iy = -1, -1
+def select_bbox(event, x, y, frame):
+    global bbox, ix, iy, drawing
     if event == cv.EVENT_LBUTTONDOWN:
+        drawing = True
+        ix, iy = x, y
         bbox = [(x, y)]  # Start point
+    elif event == cv.EVENT_MOUSEMOVE:
+        if drawing:
+            frame_copy = frame.copy()
+            cv.rectangle(frame_copy, (ix, iy), (x, y), (0, 255, 0), 1)
+            cv.imshow("Select Bounding Box", frame_copy)
     elif event == cv.EVENT_LBUTTONUP:
+        drawing = False
         bbox.append((x, y))  # End point
+        cv.rectangle(frame, (bbox[0][0], bbox[0][1]), 
+                     (bbox[1][0], bbox[1][1]), (0, 255, 0), 1)
+        cv.imshow("Select Bounding Box", frame)
         print(f"Bounding box selected: {bbox}")
 
-# Open video
 cap = cv.VideoCapture(video_path)
+fps = cap.get(cv.CAP_PROP_FPS)
+frame_delay = int(1000 / fps) if fps > 0 else 30
+
 ret, first_frame = cap.read()
 if not ret:
     print("Failed to load video.")
     exit()
 
 cv.namedWindow('Select Bounding Box')
-cv.setMouseCallback('Select Bounding Box', select_bbox)
+cv.setMouseCallback('Select Bounding Box', lambda event, x, y, flags, param: select_bbox(event, x, y, first_frame))
+cv.imshow("Select Bounding Box", first_frame)
+cv.waitKey(0)
+cv.destroyWindow("Select Bounding Box")
 
-# Get the video's frames per second (fps)
-fps = cap.get(cv.CAP_PROP_FPS)
-
-# Calculate the frame delay in milliseconds (1000 ms = 1 second)
-if fps > 0:
-    frame_delay = int(1000 / fps)
-else:
-    frame_delay = 30  # Default to 30ms if fps not retrieved
-
-while len(bbox) < 2:
-    cv.imshow('Select Bounding Box', first_frame)
-    if cv.waitKey(frame_delay) & 0xFF == 27:
-        break
 cv.destroyAllWindows()
 
 if len(bbox) < 2:
@@ -115,11 +120,11 @@ while True:
     tracking_mask = np.zeros(mask_shape, dtype=np.uint8)
 
     # Check if we need to reset bounding box
-    if frame_counter % 20 == 0:
+    if frame_counter % 30 == 0:
         print("Select new bounding box...")
         bbox = []
         cv.namedWindow('Select New Bounding Box')
-        cv.setMouseCallback('Select New Bounding Box', select_bbox)
+        cv.setMouseCallback('Select New Bounding Box', lambda event, x, y, flags, param: select_bbox(event, x, y, frame))
 
         while len(bbox) < 2:
             cv.imshow('Select New Bounding Box', frame)
@@ -147,10 +152,15 @@ while True:
     # Select good points
     if p1 is not None:
         good_new = p1[st == 1]
-        # print(good_new)
+        good_old = p0[st == 1]
     else:
         print("No points to track.")
         break
+
+    for i, (new, old) in enumerate(zip(good_new, good_old)):
+        a, b = new.ravel()
+        c, d = old.ravel()
+        frame = cv.circle(frame, (int(c), int(d)), 1, (0, 255, 0), -1)
 
     # Extract and draw outer contour
     if len(good_new) > 2:
