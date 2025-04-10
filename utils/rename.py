@@ -23,5 +23,5 @@ def rename_files(folder_path):
         counter += 1
 
 # Replace with the path to your folder
-folder_path = "/Users/liumengyuan/Desktop/muscle_seg/muscle_tracking/mask_longus"  # Change this to your folder path
+folder_path = "/Users/liumengyuan/Downloads/muscle_data/06upper"  # Change this to your folder path
 rename_files(folder_path)

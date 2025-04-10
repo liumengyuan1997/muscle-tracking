@@ -50,13 +50,13 @@ def calculate_dice_scores(folder_gt, folder_pred):
     return dice_scores
 
 # Example usage
-folder_ground_truth = "/Users/liumengyuan/Downloads/muscle_data/06totalmasks"  # Replace with your ground truth folder path
-folder_predictions = "/Users/liumengyuan/Desktop/muscle_seg/muscle_tracking/mask_longus"    # Replace with your prediction folder path
+folder_ground_truth = "/Users/liumengyuan/Downloads/muscle_data/06S1_axial_Masks"  # Replace with your ground truth folder path
+folder_predictions = "/Users/liumengyuan/Desktop/muscle_seg/muscle_tracking/mask_wavelet"    # Replace with your prediction folder path
 
 dice_scores = calculate_dice_scores(folder_ground_truth, folder_predictions)
 # print("dice scores:", dice_scores)
 # Specify the file path
-output_file = "dice_scores.txt"
+output_file = "dice_scores_original_wavelet.txt"
 
 # Write scores to the file
 with open(output_file, "w") as file:

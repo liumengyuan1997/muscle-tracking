@@ -31,7 +31,7 @@ def process_json_to_mask(input_folder, output_folder, image_shape):
             print(f"Mask saved: {output_mask_path}")
 
 # Example usage
-input_folder = '/Users/liumengyuan/Downloads/muscle_data/06total'  # Replace with the path to your folder containing JSON files
+input_folder = '/Users/liumengyuan/Downloads/muscle_data/06S1_axial_Original/new06'  # Replace with the path to your folder containing JSON files
 output_folder = '/Users/liumengyuan/Downloads/muscle_data/06totalmasks'  # Replace with the path to save the masks
 image_shape = (144, 544)  # Replace with your image dimensions
 
